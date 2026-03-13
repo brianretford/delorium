@@ -27,9 +27,14 @@ type = "uniswap_v4_pool_state"
 adapter = "uniswap-v4-pool-state"
 chain = "ethereum"
 pool_id = "0x39d8c5f8c61e975e9aa68e61609d40b93fcb452496639648d60d4f4af89f7872"
+currency0 = "0x000006c2a22ff4a44ff1f5d0f2ed65f781f55555"
+currency1 = "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+fee = 9600
+tick_spacing = 192
+hooks = "0x0000000000000000000000000000000000000000"
 base_token = "ZKC"
 quote_token = "USDC"
-base_token_address = "0x000006b9225A5d7e1da9B6d14819544b90CbdE4E"
+base_token_address = "0x000006c2a22ff4a44ff1f5d0f2ed65f781f55555"
 quote_token_address = "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
 base_decimals = 18
 quote_decimals = 6
@@ -39,7 +44,7 @@ normalization = "usd_via_quote"
 [checkpoints]
 schedule = "fixed_interval"
 interval_seconds = 300
-count = 288
+count = 3000
 anchor = "latest"
 
 [mapper]
@@ -93,3 +98,24 @@ kind = "destination"
 contract = "ChainlinkPriceFeedAdapter"
 interface = "AggregatorV3Interface"
 stores = ["latest_round", "batch_root", "window_metadata", "recent_ring_buffer"]
+
+[[stages]]
+id = "map-checkpoints"
+type = "map_checkpoints"
+source = "uniswap_v4_pool"
+proof_boundary = "per_checkpoint_notional"
+
+[[stages]]
+id = "reduce-checkpoint-price"
+type = "reduce_checkpoint_price"
+input = "map-checkpoints"
+
+[[stages]]
+id = "map-histogram"
+type = "map_histogram"
+input = "reduce-checkpoint-price"
+
+[[stages]]
+id = "reduce-histogram"
+type = "reduce_histogram"
+input = "map-histogram"
