@@ -1,0 +1,95 @@
+name = "zkc-price-feed"
+version = 1
+description = "Bootstraps a Chainlink-compatible ZKC/USD price feed on Base from a Uniswap v4 pool using Delorium."
+
+[network]
+chain = "base"
+settlement_chain = "base"
+
+[asset]
+base = "ZKC"
+quote = "USD"
+
+[trigger]
+mode = "any"
+
+[[trigger.conditions]]
+type = "staleness"
+max_age_seconds = 300
+
+[[trigger.conditions]]
+type = "deviation_bps"
+threshold_bps = 50
+reference = "latest_published_value"
+
+[sources.uniswap_v4_pool]
+type = "uniswap_v4_pool_state"
+adapter = "uniswap-v4-pool-state"
+chain = "ethereum"
+pool_id = "0x39d8c5f8c61e975e9aa68e61609d40b93fcb452496639648d60d4f4af89f7872"
+base_token = "ZKC"
+quote_token = "USDC"
+base_token_address = "0x000006b9225A5d7e1da9B6d14819544b90CbdE4E"
+quote_token_address = "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+base_decimals = 18
+quote_decimals = 6
+quote_notionals = ["100e6", "1000e6", "10000e6"]
+normalization = "usd_via_quote"
+
+[checkpoints]
+schedule = "fixed_interval"
+interval_seconds = 300
+count = 288
+anchor = "latest"
+
+[mapper]
+id = "historical-pool-checkpoint"
+type = "historical_checkpoint"
+source = "uniswap_v4_pool"
+proof_boundary = "per_checkpoint_notional"
+
+[reducer]
+id = "zkc-usd-twap"
+type = "twap"
+input = "mapper"
+window = "full_checkpoint_set"
+flash_protection = "enabled"
+outlier_policy = "clip_deviation"
+max_point_deviation_bps = 200
+
+[compute]
+execution = "offchain"
+backend = "boundless"
+guest = "uniswap-v4-price-guest"
+merklize = true
+
+[materialization]
+batch_commitment = "merkle_root"
+publish = ["reduced_output", "checkpoint_commitment"]
+data_availability = "offchain_with_inclusion_proofs"
+
+[retention]
+onchain_recent_reduced_outputs = 32
+offchain_checkpoint_history = 4096
+
+[destination]
+type = "chainlink_compatible_feed"
+adapter = "chainlink-feed"
+output_key = "zkc-usd"
+decimals = 8
+publish_mode = "latest_round_only"
+
+[requestor]
+type = "boundless_smart_contract_requestor"
+authorization = "trigger_gated"
+callback = "chainlink-feed"
+
+[adapters.source.uniswap-v4-pool-state]
+kind = "source"
+reads = ["slot0", "liquidity", "tick_bitmap", "ticks"]
+
+[adapters.destination.chainlink-feed]
+kind = "destination"
+contract = "ChainlinkPriceFeedAdapter"
+interface = "AggregatorV3Interface"
+stores = ["latest_round", "batch_root", "window_metadata", "recent_ring_buffer"]
